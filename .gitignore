@@ -1,0 +1,20 @@
+# Environment & secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Output
+output/
+
+# Binary assets (user-specific)
+template.docx
+textbook.pdf
