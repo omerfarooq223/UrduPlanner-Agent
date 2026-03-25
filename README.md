@@ -1,6 +1,14 @@
-# UrduPlanner
+# UrduPlanner v2.0
 
 AI-powered Urdu lesson planner that generates weekly lesson plans from textbook PDFs using LLMs. Extracts content via OCR, repairs garbled Urdu text, and fills a structured Word template — all from an interactive **CLI**.
+
+### Features (v2.0)
+
+- **Concurrent Processing**: Parallelizes PDF extraction, OCR repair, and LLM generation across 3 lessons for significant speedup.
+- **Robust Page Range Parsing**: Supports complex page lists like `1, 3, 5-10, 15`.
+- **Progress Indicators**: Live dashboard with progress bars for each lesson using `rich`.
+- **Structured Logging**: Automatic audit trail for all LLM interactions and errors in the `logs/` directory.
+- **Flexible Inputs**: Now includes a `Subject` prompt for multi-subject support.
 
 ### CLI Output
 ![CLI Output](assets/cli-output.png)
@@ -33,6 +41,8 @@ UrduPlanner/
 ├── docs/
 │   └── workflow.md        # Detailed pipeline documentation
 │
+├── logs/                  # [NEW] Execution logs (gitignored)
+│
 ├── skills/                # Core agent skills
 │   ├── pdf_extractor/
 │   │   ├── SKILL.md       # Agent instructions
@@ -43,11 +53,11 @@ UrduPlanner/
 │   ├── rtl_fixer/
 │   │   ├── SKILL.md       # Agent instructions
 │   │   └── rtl_fixer.py   # RTL punctuation fixes for Urdu text
-│   └── template_engine/
-│       ├── SKILL.md       # Agent instructions
-│       └── template_engine.py  # Word template parser and filler
-│
-└── output/                # Generated planner .docx files (gitignored)
+│   ├── template_engine/
+│   │   ├── SKILL.md       # Agent instructions
+│   │   └── template_engine.py  # Word template parser and filler
+│   │
+│   └── output/            # Generated planner .docx files (gitignored)
 ```
 
 ## Prerequisites
@@ -86,7 +96,8 @@ The program asks all questions interactively — no command-line arguments neede
 ```
 → Week number?          (e.g. 8)
 → Date range?           (e.g. 9 March to 13 March)
-→ Pages?                (e.g. 99-108)
+→ Pages?                (e.g. 1-5, 12, 15-20)
+→ Subject?              (e.g. Islamiyat)
 ```
 
 ## Configuration
@@ -99,6 +110,7 @@ All settings are in `.env` (see `.env.example`):
 | `MODEL` | `llama-3.3-70b-versatile` | LLM model to use |
 | `TEMPERATURE` | `0.3` | LLM temperature for generation |
 | `OUTPUT_DIR` | `output` | Directory for generated planners |
+| `LOG_DIR` | `logs` | Directory for log files |
 
 ## Output
 
@@ -110,33 +122,12 @@ Planner_Week_8_p99-108.docx
 
 The file contains the filled lesson plan template with 3 lessons, each covering a subset of the specified pages.
 
-## Lesson Plan Table Layout
-
-Each lesson fills a 14-row table in the Word template:
-
-| Row | Field | Description |
-|-----|-------|-------------|
-| 0 | Header | سبق کی منصوبہ بندی |
-| 1 | Meta | Teaching week + dates |
-| 2 | Meta | Duration, class, unit number |
-| 3 | Title | Lesson title + keywords |
-| 4 | Outcomes | Learning outcomes (حاصلات تعلم) |
-| 5 | Resources | Teaching resources |
-| 6 | Method | Teaching method label |
-| 7 | Introduction | Warm-up questions + duration |
-| 8 | Core Teaching | Main activities + page references |
-| 9 | Classwork | Reading/writing exercises (longest section) |
-| 10 | Closing | Comprehension questions + duration |
-| 11 | Assessment | Assessment description |
-| 12 | Homework | Homework (optional) |
-| 13 | Review | Teaching review (optional) |
-
 ## Tech Stack
 
 - **LLM**: Groq API → LLaMA 3.3 70B Versatile (128K context)
 - **PDF Extraction**: PyMuPDF (text layer) + Tesseract OCR (scanned pages)
 - **Template**: python-docx (Word document manipulation)
-- **CLI UX**: Rich (styled panels, colored output)
+- **CLI UX**: Rich (concurrent progress bars, styled panels)
 - **RTL Handling**: Custom regex-based fixer for Urdu punctuation
 
 ## Limitations

@@ -11,5 +11,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 MODEL = os.getenv("MODEL", "llama-3.3-70b-versatile")
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.3"))
 
-# Output directory for generated planners
+# Output and Log directories
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
+LOG_DIR = os.getenv("LOG_DIR", "logs")

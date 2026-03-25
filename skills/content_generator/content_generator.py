@@ -89,29 +89,23 @@ def repair_ocr_text(raw_text: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def generate_planner_content(
-    template_structure: dict,
-    lesson_texts: list[str],
-    page_splits: list[tuple],
+def generate_single_lesson(
+    lesson_num: int,
+    text: str,
+    start_p: int,
+    end_p: int,
+    sample: str,
     week_number: int | None = None,
     date_range: str = "",
     subject: str = "",
     extra_instructions: str = "",
-) -> list[dict]:
+) -> dict:
     """
-    Call the LLM to generate content for all 3 weekly lessons.
-    Each lesson receives ONLY its own textbook pages, ensuring unique content.
-    Returns a list of 3 dicts, one per lesson.
+    Call the LLM to generate content for a single lesson.
     """
     client = Groq(api_key=config.GROQ_API_KEY)
-    sample = json.dumps(template_structure.get("sample_lesson", {}), ensure_ascii=False, indent=2)
 
-    lessons = []
-    for lesson_num in range(len(lesson_texts)):
-        start_p, end_p = page_splits[lesson_num]
-        text = lesson_texts[lesson_num]
-
-        user_msg = f"""Here is a SAMPLE lesson from the existing template (follow this exact style):
+    user_msg = f"""Here is a SAMPLE lesson from the existing template (follow this exact style):
 
 {sample}
 
@@ -119,7 +113,7 @@ Here is the textbook content for pages {start_p}-{end_p} (this lesson ONLY cover
 
 {text}
 
-Generate lesson {lesson_num + 1} of 3 for this week. This lesson covers ONLY pages {start_p} to {end_p}. Do NOT reference or include content from other pages.
+Generate lesson {lesson_num} of 3 for this week. This lesson covers ONLY pages {start_p} to {end_p}. Do NOT reference or include content from other pages.
 {f"Teaching week number: {week_number}" if week_number else ""}
 {f"Date range: {date_range}" if date_range else ""}
 {f"Subject: {subject}" if subject else ""}
@@ -127,32 +121,41 @@ Generate lesson {lesson_num + 1} of 3 for this week. This lesson covers ONLY pag
 
 Return ONLY a single JSON object for this ONE lesson (not an array)."""
 
-        response = client.chat.completions.create(
-            model=config.MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=config.TEMPERATURE,
-            max_tokens=4096,
-        )
+    response = client.chat.completions.create(
+        model=config.MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=config.TEMPERATURE,
+        max_tokens=4096,
+    )
 
-        raw = response.choices[0].message.content.strip()
+    raw = response.choices[0].message.content.strip()
 
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1]
-            raw = raw.rsplit("```", 1)[0]
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1]
+        raw = raw.rsplit("```", 1)[0]
 
+    try:
         lesson = json.loads(raw)
-        if isinstance(lesson, list):
-            lesson = lesson[0]
+    except json.JSONDecodeError:
+        # Fallback if LLM output is slightly malformed
+        import re
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            lesson = json.loads(match.group())
+        else:
+            raise
 
-        fixed = {}
+    if isinstance(lesson, list):
+        lesson = lesson[0]
+
+    fixed = {}
+    if isinstance(lesson, dict):
         for key, value in lesson.items():
             if isinstance(value, str):
                 fixed[key] = fix_rtl_text(value)
             else:
                 fixed[key] = value
-        lessons.append(fixed)
-
-    return lessons
+    return fixed
