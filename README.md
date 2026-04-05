@@ -1,6 +1,6 @@
 # UrduPlanner v2.0
 
-AI-powered Urdu lesson planner that generates weekly lesson plans from textbook PDFs using LLMs. Extracts content via OCR, repairs garbled Urdu text, and fills a structured Word template — all from an interactive **CLI**.
+AI-powered Urdu lesson planner that generates weekly lesson plans from textbook PDFs using LLMs. Extracts content via OCR, repairs garbled Urdu text, and fills a structured Word template via a web interface (and optional CLI).
 
 ### Features (v2.0)
 
@@ -10,8 +10,8 @@ AI-powered Urdu lesson planner that generates weekly lesson plans from textbook 
 - **Structured Logging**: Automatic audit trail for all LLM interactions and errors in the `logs/` directory.
 - **Flexible Inputs**: Now includes a `Subject` prompt for multi-subject support.
 
-### CLI Output
-![CLI Output](assets/cli-output.png)
+### UI Output
+![UI Output](assets/ui-output.png)
 
 ### Generated Lesson Plan
 ![Lesson Plan Sample](assets/lesson-plan-sample.png)
@@ -21,7 +21,7 @@ AI-powered Urdu lesson planner that generates weekly lesson plans from textbook 
 - Accepts a **textbook PDF** + a **Word template** for the lesson plan layout
 - **Extracts text** from PDF pages (supports both text-based and scanned/image-based PDFs via Tesseract OCR)
 - **Repairs garbled OCR** — sends mangled Urdu text to the LLM for intelligent reconstruction
-- **Generates 3 structured lessons** per week via LLM (Groq / LLaMA 3.3 70B), each covering a different page range
+- **Generates 3 structured lessons** per week via LLM (Ollama / Mistral 7B), each covering a different page range
 - **Fixes RTL issues** — corrects punctuation placement problems that LLMs produce with Urdu/Arabic script
 - **Fills the Word template** — writes generated content into the exact table layout, preserving formatting
 - Outputs a ready-to-print `.docx` planner
@@ -31,6 +31,7 @@ AI-powered Urdu lesson planner that generates weekly lesson plans from textbook 
 ```
 UrduPlanner/
 ├── main.py                # CLI entry point — interactive prompts, orchestration
+├── app.py                 # Web entry point — Flask API + frontend
 ├── config.py              # Centralized settings (.env loader)
 ├── requirements.txt       # Python dependencies
 ├── .env.example           # Environment variable template
@@ -39,9 +40,23 @@ UrduPlanner/
 ├── LICENSE                # MIT License
 │
 ├── docs/
-│   └── workflow.md        # Detailed pipeline documentation
+│   ├── QUICK_START.md     # 5-minute web setup
+│   ├── FRONTEND.md        # Web frontend quick guide
+│   ├── WEB_GUIDE.md       # Complete web documentation
+│   ├── IMPLEMENTATION_CHECKLIST.md  # Feature checklist
+│   └── workflow.md        # Detailed processing pipeline
+├── templates/
+│   └── index.html         # Web UI template
+├── static/
+│   ├── style.css          # Frontend styles
+│   └── script.js          # Frontend logic
+├── assets/
+│   ├── ui-output.png      # Web UI screenshot
+│   └── lesson-plan-sample.png  # Generated output sample
 │
-├── logs/                  # [NEW] Execution logs (gitignored)
+├── uploads/               # Temporary uploaded files (gitignored)
+├── logs/                  # Runtime logs (gitignored)
+├── output/                # Generated planner .docx files (gitignored)
 │
 ├── skills/                # Core agent skills
 │   ├── pdf_extractor/
@@ -56,15 +71,13 @@ UrduPlanner/
 │   ├── template_engine/
 │   │   ├── SKILL.md       # Agent instructions
 │   │   └── template_engine.py  # Word template parser and filler
-│   │
-│   └── output/            # Generated planner .docx files (gitignored)
 ```
 
 ## Prerequisites
 
 - **Python 3.10+**
 - **Tesseract OCR** with Urdu language pack (for scanned PDFs)
-- **Groq API key** (free tier available at [console.groq.com](https://console.groq.com))
+- **Ollama** (download from [ollama.ai](https://ollama.ai)) with Mistral 7B model
 
 ### Installing Tesseract (macOS)
 
@@ -79,16 +92,26 @@ brew install tesseract-lang   # includes Urdu language data
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set up your API key
-cp .env.example .env
-# Edit .env and add your GROQ_API_KEY
+# 2. Set up Ollama
+# Ensure Ollama is running: ollama serve
+# In another terminal, pull Mistral 7B: ollama pull mistral:7b
 
-# 3. Place your files
+# 3. Copy env template
+cp .env.example .env
+# (Optional) Edit .env if your Ollama server is on a different host/port
+# 4. Place your files
 #    - template.docx  → Word template with the lesson plan table layout
 #    - textbook.pdf   → The Urdu textbook to extract content from
 
-# 4. Run
+# 5. Run
 python main.py
+```
+
+For web mode, run:
+
+```bash
+python app.py
+# Open http://127.0.0.1:5001
 ```
 
 The program asks all questions interactively — no command-line arguments needed:
@@ -106,9 +129,10 @@ All settings are in `.env` (see `.env.example`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GROQ_API_KEY` | — | Your Groq API key |
-| `MODEL` | `llama-3.3-70b-versatile` | LLM model to use |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `MODEL` | `mistral:7b` | Ollama model to use |
 | `TEMPERATURE` | `0.3` | LLM temperature for generation |
+| `MAX_UPLOAD_MB` | `300` | Maximum combined upload payload size accepted by web API |
 | `OUTPUT_DIR` | `output` | Directory for generated planners |
 | `LOG_DIR` | `logs` | Directory for log files |
 
@@ -124,10 +148,11 @@ The file contains the filled lesson plan template with 3 lessons, each covering 
 
 ## Tech Stack
 
-- **LLM**: Groq API → LLaMA 3.3 70B Versatile (128K context)
+- **LLM**: Ollama → Mistral 7B
 - **PDF Extraction**: PyMuPDF (text layer) + Tesseract OCR (scanned pages)
 - **Template**: python-docx (Word document manipulation)
-- **CLI UX**: Rich (concurrent progress bars, styled panels)
+- **Web UI**: Flask + HTML/CSS/JS frontend
+- **CLI UX**: Rich (interactive prompts and styled panels)
 - **RTL Handling**: Custom regex-based fixer for Urdu punctuation
 
 ## Limitations

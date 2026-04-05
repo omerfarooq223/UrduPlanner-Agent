@@ -10,7 +10,7 @@ This document describes the end-to-end workflow of the UrduPlanner v2.0, which u
 
 ### Step 1: Configuration Loading
 - On startup, `config.py` reads the `.env` file via `python-dotenv`.
-- Settings loaded: `GROQ_API_KEY`, `MODEL`, `TEMPERATURE`, `OUTPUT_DIR`, `LOG_DIR`.
+- Settings loaded: `OLLAMA_BASE_URL`, `MODEL`, `TEMPERATURE`, `OUTPUT_DIR`, `LOG_DIR`.
 - All LLM calls use the centralized model and temperature settings.
 - **[NEW]** Log directory is initialized for audit trails.
 
@@ -35,7 +35,7 @@ This document describes the end-to-end workflow of the UrduPlanner v2.0, which u
 - Uses PyMuPDF for text layers and Tesseract OCR for scanned pages.
 
 #### 4.2: OCR Text Repair
-- Raw extracted text is sent to the LLM (Groq) for intelligent reconstruction.
+- Raw extracted text is sent to the LLM (Ollama / Mistral) for intelligent reconstruction.
 - Fixes mangled words and removes noise while preserving structure.
 
 #### 4.3: Lesson Content Generation

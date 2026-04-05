@@ -47,6 +47,6 @@ Each lesson dict contains: `teaching_week`, `dates`, `unit_number`, `title`, `ou
 - `generate_single_lesson(lesson_num, text, start_p, end_p, sample, ...)` — generates a single lesson
 
 ## Dependencies
-- `groq` (Groq API client)
-- `config.MODEL`, `config.TEMPERATURE`, `config.GROQ_API_KEY`
+- `openai` (Ollama client)
+- `config.MODEL`, `config.TEMPERATURE`, `config.OLLAMA_BASE_URL`
 - `skills.rtl_fixer.rtl_fixer.fix_rtl_text`

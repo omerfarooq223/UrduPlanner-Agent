@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL = os.getenv("MODEL", "llama-3.3-70b-versatile")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+MODEL = os.getenv("MODEL", "mistral:7b")
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.3"))
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "300"))
 
 # Output and Log directories
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")

@@ -23,41 +23,43 @@ Row mapping:
   13 = Teaching review (جائزہ تدریس) — may be blank
 """
 
+import copy
 import os
+
 from docx import Document
 
 
 # Row indices in each lesson table
-ROW_HEADER = 0
-ROW_META1 = 1       # lessons/week, subject, teaching week, dates
-ROW_META2 = 2       # duration, class, unit number, dates
-ROW_TITLE = 3       # lesson title + keywords
-ROW_OUTCOMES = 4    # learning outcomes
-ROW_RESOURCES = 5   # teaching resources
-ROW_METHOD = 6      # teaching method label row
-ROW_INTRO = 7       # introduction / warm-up questions
-ROW_CORE = 8        # core teaching activities
-ROW_CLASSWORK = 9   # classwork / reading exercises
-ROW_CLOSING = 10    # closing discussion questions
-ROW_ASSESSMENT = 11 # assessment
-ROW_HOMEWORK = 12   # homework (optional)
-ROW_REVIEW = 13     # teaching review (optional)
+ROW_HEADER     = 0
+ROW_META1      = 1   # lessons/week, subject, teaching week, dates
+ROW_META2      = 2   # duration, class, unit number, dates
+ROW_TITLE      = 3   # lesson title + keywords
+ROW_OUTCOMES   = 4   # learning outcomes
+ROW_RESOURCES  = 5   # teaching resources
+ROW_METHOD     = 6   # teaching method label row
+ROW_INTRO      = 7   # introduction / warm-up questions
+ROW_CORE       = 8   # core teaching activities
+ROW_CLASSWORK  = 9   # classwork / reading exercises
+ROW_CLOSING    = 10  # closing discussion questions
+ROW_ASSESSMENT = 11  # assessment
+ROW_HOMEWORK   = 12  # homework (optional)
+ROW_REVIEW     = 13  # teaching review (optional)
 
-# Fields that the LLM needs to generate per lesson
+# Fields that the LLM generates per lesson
 DYNAMIC_FIELDS = [
-    "teaching_week",    # row 1, col 2 — e.g. تدریسی ہفتہ: ۸
-    "dates",            # row 1, col 3 — e.g. تاریخ:: ۹مارچ تا ۱۳مارچ
-    "unit_number",      # row 2, col 2 — e.g. یونٹ نمبر: ۴
-    "title",            # row 3, cols 0-2 — lesson title + keywords
-    "outcomes",         # row 4, cols 0-2 — learning outcomes
-    "resources",        # row 5, cols 0-2 — teaching resources
-    "intro",            # row 7, cols 0-2 — intro questions + duration
-    "core_teaching",    # row 8, cols 0-2 — core teaching activities + duration
-    "classwork",        # row 9, cols 0-2 — reading/writing exercises + duration
-    "closing",          # row 10, cols 0-2 — closing questions + duration
-    "assessment",       # row 11, cols 0-2 — assessment description
-    "homework",         # row 12, cols 0-2 — homework (can be empty)
-    "review",           # row 13, cols 0-2 — teaching review (can be empty)
+    "teaching_week",   # row 1, col 2 — e.g. تدریسی ہفتہ: ۸
+    "dates",           # row 1, col 3 — e.g. تاریخ:: ۹مارچ تا ۱۳مارچ
+    "unit_number",     # row 2, col 2 — e.g. یونٹ نمبر: ۴
+    "title",           # row 3, cols 0-2 — lesson title + keywords
+    "outcomes",        # row 4, cols 0-2 — learning outcomes
+    "resources",       # row 5, cols 0-2 — teaching resources
+    "intro",           # row 7, cols 0-2 — intro questions + duration
+    "core_teaching",   # row 8, cols 0-2 — core teaching activities + duration
+    "classwork",       # row 9, cols 0-2 — reading/writing exercises + duration
+    "closing",         # row 10, cols 0-2 — closing questions + duration
+    "assessment",      # row 11, cols 0-2 — assessment description
+    "homework",        # row 12, cols 0-2 — homework (can be empty)
+    "review",          # row 13, cols 0-2 — teaching review (can be empty)
 ]
 
 
@@ -71,7 +73,11 @@ def read_template(template_path: str) -> Document:
 def get_template_structure(doc: Document) -> dict:
     """
     Extract the template structure showing what each lesson table looks like.
-    Returns a dict with sample content from table 0 so the LLM can see the pattern.
+    Returns a dict with row labels and content from table 0.
+
+    NOTE: This is a debugging/inspection utility only.
+    Do NOT pass its output to the LLM — style guidance is hardcoded
+    in SYSTEM_PROMPT in content_generator.py.
     """
     structure = {
         "num_lessons": len(doc.tables),
@@ -82,9 +88,8 @@ def get_template_structure(doc: Document) -> dict:
     if doc.tables:
         table = doc.tables[0]
         for r, row in enumerate(table.rows):
-            # Col 3 = label, Col 0 = content (merged with 1,2)
-            label = table.rows[r].cells[3].text.strip() if len(row.cells) > 3 else ""
-            content = table.rows[r].cells[0].text.strip()
+            label = row.cells[3].text.strip() if len(row.cells) > 3 else ""
+            content = row.cells[0].text.strip()
             structure["sample_lesson"][f"row_{r}"] = {
                 "label": label,
                 "content": content,
@@ -101,21 +106,22 @@ def fill_lesson_table(table, lesson_data: dict):
       teaching_week, dates, unit_number, title, outcomes, resources,
       intro, core_teaching, classwork, closing, assessment, homework, review
     """
+    # Bug fix: removed "dates2" — it was never in lesson_data so never triggered.
+    # The manual copy below handles the duplicate dates in ROW_META2.
     field_to_row = {
-        "teaching_week": (ROW_META1, [2]),       # col 2 only
-        "dates":         (ROW_META1, [3]),        # col 3 only
-        "dates2":        (ROW_META2, [3]),        # col 3 duplicate
-        "unit_number":   (ROW_META2, [2]),        # col 2 only
-        "title":         (ROW_TITLE, [0, 1, 2]),  # merged cols
+        "teaching_week": (ROW_META1,    [2]),
+        "dates":         (ROW_META1,    [3]),
+        "unit_number":   (ROW_META2,    [2]),
+        "title":         (ROW_TITLE,    [0, 1, 2]),
         "outcomes":      (ROW_OUTCOMES, [0, 1, 2]),
-        "resources":     (ROW_RESOURCES, [0, 1, 2]),
-        "intro":         (ROW_INTRO, [0, 1, 2]),
-        "core_teaching": (ROW_CORE, [0, 1, 2]),
-        "classwork":     (ROW_CLASSWORK, [0, 1, 2]),
-        "closing":       (ROW_CLOSING, [0, 1, 2]),
-        "assessment":    (ROW_ASSESSMENT, [0, 1, 2]),
+        "resources":     (ROW_RESOURCES,[0, 1, 2]),
+        "intro":         (ROW_INTRO,    [0, 1, 2]),
+        "core_teaching": (ROW_CORE,     [0, 1, 2]),
+        "classwork":     (ROW_CLASSWORK,[0, 1, 2]),
+        "closing":       (ROW_CLOSING,  [0, 1, 2]),
+        "assessment":    (ROW_ASSESSMENT,[0, 1, 2]),
         "homework":      (ROW_HOMEWORK, [0, 1, 2]),
-        "review":        (ROW_REVIEW, [0, 1, 2]),
+        "review":        (ROW_REVIEW,   [0, 1, 2]),
     }
 
     for field, value in lesson_data.items():
@@ -126,18 +132,28 @@ def fill_lesson_table(table, lesson_data: dict):
             cell = table.rows[row_idx].cells[col]
             _replace_cell_text(cell, value)
 
-    # Copy dates to row 2 col 3 as well (template has it in both rows)
+    # Copy dates into ROW_META2 col 3 — template has date in both meta rows
     if "dates" in lesson_data:
-        _replace_cell_text(table.rows[ROW_META2].cells[3], lesson_data["dates"])
+        _replace_cell_text(
+            table.rows[ROW_META2].cells[3],
+            lesson_data["dates"],
+        )
 
 
-def fill_all_lessons(template_path: str, lessons: list[dict], output_path: str) -> str:
+def fill_all_lessons(
+    template_path: "str | Document",
+    lessons: list[dict],
+    output_path: str,
+) -> str:
     """
     Fill all lesson tables in the template.
 
+    template_path: either a file path string or an already-loaded Document object.
     lessons: list of dicts, one per table/lesson, with keys from DYNAMIC_FIELDS.
     """
-    doc = Document(template_path)
+    # Bug fix: accept both a path string and a pre-loaded Document object
+    # so web flow (app.py) and CLI flow (main.py) can both call this correctly.
+    doc = template_path if isinstance(template_path, Document) else Document(template_path)
 
     if len(lessons) > len(doc.tables):
         raise ValueError(
@@ -158,7 +174,6 @@ def _replace_paragraph_text(para, new_text: str):
         para.text = new_text
         return
 
-    # Keep the formatting of the first run (font: Urdu Typesetting, size, RTL, etc.)
     first_run = para.runs[0]
     for run in para.runs:
         run.text = ""
@@ -166,12 +181,50 @@ def _replace_paragraph_text(para, new_text: str):
 
 
 def _replace_cell_text(cell, new_text: str):
-    """Replace all text in a table cell while preserving formatting."""
-    if cell.paragraphs:
-        _replace_paragraph_text(cell.paragraphs[0], new_text)
-        # Clear any extra paragraphs (but keep them for formatting)
-        for para in cell.paragraphs[1:]:
-            for run in para.runs:
-                run.text = ""
-    else:
+    """
+    Replace all text in a table cell while preserving RTL formatting.
+
+    Bug fix: previously wrote everything into paragraph[0] and wiped the rest,
+    which collapsed multi-line fields (classwork, outcomes, etc.) into one block.
+    Now splits on newlines and creates a properly formatted paragraph per line.
+    """
+    if not cell.paragraphs:
         cell.text = new_text
+        return
+
+    # Capture formatting from first paragraph/run before we touch anything
+    template_para = cell.paragraphs[0]
+    template_run = template_para.runs[0] if template_para.runs else None
+    template_pPr = copy.deepcopy(template_para._pPr) if template_para._pPr is not None else None
+    template_rPr = (
+        copy.deepcopy(template_run._r.rPr)
+        if template_run is not None and template_run._r.rPr is not None
+        else None
+    )
+
+    # Clear all existing runs in all paragraphs
+    for para in cell.paragraphs:
+        for run in para.runs:
+            run.text = ""
+
+    lines = new_text.split("\n")
+
+    # Write first line into the existing first paragraph (preserves cell-level formatting)
+    if template_run is not None:
+        template_run.text = lines[0]
+    else:
+        template_para.text = lines[0]
+
+    # Add a new paragraph per remaining line, copying RTL/font formatting
+    for line in lines[1:]:
+        new_para = cell.add_paragraph()
+
+        # Copy paragraph properties: RTL direction, spacing, alignment
+        if template_pPr is not None:
+            new_para._pPr = copy.deepcopy(template_pPr)
+
+        # Add run and copy run properties: font, size, bold, color
+        new_run = new_para.add_run(line)
+        if template_rPr is not None:
+            new_run._r.get_or_add_rPr()
+            new_run._r.rPr = copy.deepcopy(template_rPr)

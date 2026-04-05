@@ -1,0 +1,558 @@
+/* ============================================================================
+   UrduPlanner - Beautiful Orange & White Theme
+   ============================================================================ */
+
+:root {
+    /* Primary Colors */
+    --primary-orange: #FF9500;
+    --dark-orange: #E68A00;
+    --light-orange: #FFB84D;
+    --very-light-orange: #FFF0E6;
+    
+    /* Neutrals */
+    --white: #FFFFFF;
+    --off-white: #FAFAFA;
+    --light-gray: #F5F5F5;
+    --medium-gray: #D0D0D0;
+    --dark-gray: #666666;
+    --text-dark: #333333;
+    
+    /* Status Colors */
+    --success: #4CAF50;
+    --error: #E53935;
+    --warning: #FFC107;
+    
+    /* Shadows & Spacing */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 8px rgba(255, 149, 0, 0.15);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.12);
+    --spacing: 1rem;
+}
+
+/* ============================================================================
+   Global Styles
+   ============================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, var(--very-light-orange) 0%, var(--white) 100%);
+    color: var(--text-dark);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* ============================================================================
+   Container & Layout
+   ============================================================================ */
+
+.container {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 1rem 2rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.header {
+    background: linear-gradient(135deg, var(--primary-orange) 0%, var(--dark-orange) 100%);
+    color: var(--white);
+    padding: 3rem var(--spacing) 2rem;
+    text-align: center;
+    border-radius: 16px;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-md);
+}
+
+.header-content {
+    animation: slideDown 0.6s ease-out;
+}
+
+.logo {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.5px;
+}
+
+.tagline {
+    font-size: 1.1rem;
+    opacity: 0.95;
+    font-weight: 300;
+}
+
+/* ============================================================================
+   Main Content
+   ============================================================================ */
+
+.main-content {
+    flex: 1;
+    margin-bottom: 2rem;
+    width: 100%;
+}
+
+/* ============================================================================
+   Sections
+   ============================================================================ */
+
+.section {
+    background: var(--white);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    animation: slideUp 0.5s ease-out;
+    width: 100%;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    color: var(--primary-orange);
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+    border-bottom: 3px solid var(--very-light-orange);
+    padding-bottom: 0.5rem;
+}
+
+/* ============================================================================
+   File Upload Section
+   ============================================================================ */
+
+.file-upload-section {
+}
+
+.upload-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.upload-box {
+    border: 2px dashed var(--primary-orange);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--off-white);
+    position: relative;
+    overflow: hidden;
+}
+
+.upload-box:hover {
+    background: var(--very-light-orange);
+    border-color: var(--dark-orange);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.upload-box.drag-over {
+    background: var(--very-light-orange);
+    border-color: var(--dark-orange);
+    transform: scale(1.02);
+}
+
+.upload-label {
+    cursor: pointer;
+    display: block;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.25rem;
+}
+
+.upload-hint {
+    font-size: 0.85rem;
+    color: var(--dark-gray);
+}
+
+.file-input {
+    display: none;
+}
+
+.file-name {
+    font-size: 0.9rem;
+    color: var(--success);
+    margin-top: 0.5rem;
+    font-weight: 500;
+}
+
+#validation-message {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+/* ============================================================================
+   Form Section
+   ============================================================================ */
+
+.form-section {
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--light-gray);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary-orange);
+    background: var(--very-light-orange);
+    box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.1);
+}
+
+.form-hint {
+    font-size: 0.8rem;
+    color: var(--dark-gray);
+    margin-top: 0.3rem;
+}
+
+/* ============================================================================
+   Buttons
+   ============================================================================ */
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-primary {
+    background: var(--primary-orange);
+    color: var(--white);
+}
+
+.btn-primary:hover {
+    background: var(--dark-orange);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary:disabled {
+    background: var(--medium-gray);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn-secondary {
+    background: var(--light-gray);
+    color: var(--text-dark);
+}
+
+.btn-secondary:hover {
+    background: var(--medium-gray);
+    transform: translateY(-2px);
+}
+
+.btn-success {
+    background: var(--success);
+    color: var(--white);
+}
+
+.btn-success:hover {
+    background: #45a049;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-large {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+}
+
+/* ============================================================================
+   Progress Section
+   ============================================================================ */
+
+.progress-section {
+}
+
+.progress-container {
+    margin-bottom: 1.5rem;
+}
+
+.progress-bar-wrapper {
+    margin-bottom: 1rem;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--light-gray);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-orange) 0%, var(--light-orange) 100%);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.progress-text {
+    font-size: 0.9rem;
+    color: var(--dark-gray);
+    margin-top: 0.5rem;
+    text-align: center;
+}
+
+.status-box {
+    background: var(--very-light-orange);
+    border-left: 4px solid var(--primary-orange);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.status-message {
+    color: var(--text-dark);
+    font-weight: 500;
+}
+
+/* ============================================================================
+   Result Section
+   ============================================================================ */
+
+.result-section {
+}
+
+.success-box {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, rgba(255, 149, 0, 0.1) 100%);
+    border: 2px solid var(--success);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.success-message {
+    font-size: 1.1rem;
+    color: var(--text-dark);
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+}
+
+/* ============================================================================
+   Error Section
+   ============================================================================ */
+
+.error-section {
+}
+
+.error-box {
+    background: linear-gradient(135deg, rgba(229, 57, 53, 0.1) 0%, rgba(255, 193, 7, 0.1) 100%);
+    border: 2px solid var(--error);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.error-message {
+    font-size: 1rem;
+    color: var(--error);
+    font-weight: 500;
+}
+
+/* ============================================================================
+   Messages
+   ============================================================================ */
+
+.message {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.message.success {
+    background: rgba(76, 175, 80, 0.1);
+    color: var(--success);
+    border-left: 4px solid var(--success);
+}
+
+.message.error {
+    background: rgba(229, 57, 53, 0.1);
+    color: var(--error);
+    border-left: 4px solid var(--error);
+}
+
+/* ============================================================================
+   Footer
+   ============================================================================ */
+
+.footer {
+    background: linear-gradient(135deg, var(--text-dark) 0%, #1a1a1a 100%);
+    color: var(--white);
+    padding: 2rem;
+    text-align: center;
+    border-radius: 12px;
+    margin-top: auto;
+}
+
+.footer p {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+
+.footer-hint {
+    opacity: 0.7;
+    font-size: 0.85rem !important;
+}
+
+.footer-credit {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--light-orange);
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================================================
+   Responsive Design
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0.5rem;
+    }
+
+    .header {
+        padding: 2rem var(--spacing);
+    }
+
+    .logo {
+        font-size: 2rem;
+    }
+
+    .tagline {
+        font-size: 1rem;
+    }
+
+    .section {
+        padding: 1.5rem 1rem;
+    }
+
+    .upload-container {
+        grid-template-columns: 1fr;
+    }
+
+    .section-title {
+        font-size: 1.3rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .logo {
+        font-size: 1.75rem;
+    }
+
+    .section {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .form-input {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.95rem;
+    }
+}
