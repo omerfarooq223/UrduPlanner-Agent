@@ -22,7 +22,11 @@ import fitz  # PyMuPDF
 import config
 from skills.pdf_extractor.pdf_extractor import extract_pages
 from skills.template_engine.template_engine import read_template, fill_all_lessons
-from skills.content_generator.content_generator import generate_single_lesson, repair_ocr_text
+from skills.content_generator.content_generator import (
+    generate_single_lesson,
+    repair_ocr_text,
+    validate_groq_configuration,
+)
 
 # ── Logging Setup ──────────────────────────────────────────────
 os.makedirs(config.LOG_DIR, exist_ok=True)
@@ -96,7 +100,6 @@ def process_lesson(
     page_range: list[int],
     textbook_path: str,
     week_num: int | None,
-    unit_num: int | None,
     dates: str,
     subject: str,
     progress,
@@ -131,7 +134,7 @@ def process_lesson(
             end_p=end_p,
             week_number=week_num,
             date_range=dates,
-            unit_number=unit_num,
+            unit_number=lesson_num,
             subject=subject,
         )
         logger.info(f"Lesson {lesson_num} generated successfully.")
@@ -151,8 +154,14 @@ def main():
     logger.info("Starting Urdu Lesson Planner v2.0")
 
     # ── Check essentials ─────────────────────────────────────────
-    if not config.OLLAMA_BASE_URL:
-        console.print("[bold red]Error: OLLAMA_BASE_URL not configured in .env file[/]")
+    if not config.GROQ_API_KEY:
+        console.print("[bold red]Error: GROQ_API_KEY not configured in .env file[/]")
+        sys.exit(1)
+
+    try:
+        validate_groq_configuration()
+    except Exception as exc:
+        console.print(f"[bold red]Error: {exc}[/]")
         sys.exit(1)
 
     if not os.path.exists(TEMPLATE_PATH):
@@ -177,7 +186,6 @@ def main():
 
     # ── Ask for inputs ───────────────────────────────────────────
     week        = ask("Week number?", "8")
-    unit        = ask("Unit number?", "4")
     dates       = ask("Date range?", "9 March to 13 March")
     pages_input = ask("Pages?", "99-108")
     subject     = ask("Subject?", "Urdu", default="Urdu")
@@ -197,16 +205,11 @@ def main():
     except ValueError:
         week_num = None
 
-    try:
-        unit_num = int(unit)
-    except ValueError:
-        unit_num = None
-
     # Split pages across lessons
     page_splits = split_pages_list(pages_list, NUM_LESSONS)
 
     console.print()
-    console.print(f"  [bold cyan]{subject}[/]  |  Week {week}  |  Unit {unit}  |  {dates}")
+    console.print(f"  [bold cyan]{subject}[/]  |  Week {week}  |  Units 1,2,3  |  {dates}")
     for i, split in enumerate(page_splits):
         if split:
             console.print(f"  Lesson {i+1}: pages {split[0]}-{split[-1]} ({len(split)} pages)")
@@ -234,7 +237,6 @@ def main():
                     page_splits[i],
                     TEXTBOOK_PATH,
                     week_num,
-                    unit_num,
                     dates,
                     subject,
                     progress,

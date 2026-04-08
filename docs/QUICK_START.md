@@ -9,19 +9,14 @@ cd /Users/muhammadomerfarooq/Desktop/omer/UrduPlanner
 # 2. Install dependencies (first time only)
 pip install -r requirements.txt
 
-# 3. Start Ollama and pull model (first time only)
-ollama serve
-# in another terminal:
-ollama pull mistral:7b
-
-# 4. Configure environment
+# 3. Configure environment
 cp .env.example .env
-# Optional: edit OLLAMA_BASE_URL if not using localhost
+# Edit .env and add your GROQ_API_KEY
 
-# 5. Run server
+# 4. Run server
 python app.py
 
-# 6. Open browser
+# 5. Open browser
 # http://127.0.0.1:5001
 ```
 
@@ -33,11 +28,10 @@ python app.py
 # Change port in app.py run section
 ```
 
-**Ollama not running or model missing?**
+**Groq API key missing or invalid?**
 
 ```bash
-ollama serve
-ollama pull mistral:7b
+echo "GROQ_API_KEY=your_key_here" >> .env
 ```
 
 **Tesseract not installed?**
@@ -49,5 +43,5 @@ brew install tesseract tesseract-lang
 ## Helpful Links
 
 - [Flask Docs](https://flask.palletsprojects.com/)
-- [Ollama](https://ollama.ai)
+- [Groq](https://console.groq.com)
 - [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)

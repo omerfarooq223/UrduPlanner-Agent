@@ -21,7 +21,7 @@ AI-powered Urdu lesson planner that generates weekly lesson plans from textbook 
 - Accepts a **textbook PDF** + a **Word template** for the lesson plan layout
 - **Extracts text** from PDF pages (supports both text-based and scanned/image-based PDFs via Tesseract OCR)
 - **Repairs garbled OCR** — sends mangled Urdu text to the LLM for intelligent reconstruction
-- **Generates 3 structured lessons** per week via LLM (Ollama / Mistral 7B), each covering a different page range
+- **Generates 3 structured lessons** per week via LLM (Groq / LLaMA 3.3 70B), each covering a different page range
 - **Fixes RTL issues** — corrects punctuation placement problems that LLMs produce with Urdu/Arabic script
 - **Fills the Word template** — writes generated content into the exact table layout, preserving formatting
 - Outputs a ready-to-print `.docx` planner
@@ -77,7 +77,7 @@ UrduPlanner/
 
 - **Python 3.10+**
 - **Tesseract OCR** with Urdu language pack (for scanned PDFs)
-- **Ollama** (download from [ollama.ai](https://ollama.ai)) with Mistral 7B model
+- **Groq API key** (free tier available at [console.groq.com](https://console.groq.com))
 
 ### Installing Tesseract (macOS)
 
@@ -92,18 +92,15 @@ brew install tesseract-lang   # includes Urdu language data
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set up Ollama
-# Ensure Ollama is running: ollama serve
-# In another terminal, pull Mistral 7B: ollama pull mistral:7b
-
-# 3. Copy env template
+# 2. Set up your API key
 cp .env.example .env
-# (Optional) Edit .env if your Ollama server is on a different host/port
-# 4. Place your files
+# Edit .env and add your GROQ_API_KEY
+
+# 3. Place your files
 #    - template.docx  → Word template with the lesson plan table layout
 #    - textbook.pdf   → The Urdu textbook to extract content from
 
-# 5. Run
+# 4. Run
 python main.py
 ```
 
@@ -129,8 +126,8 @@ All settings are in `.env` (see `.env.example`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint |
-| `MODEL` | `mistral:7b` | Ollama model to use |
+| `GROQ_API_KEY` | — | Your Groq API key |
+| `MODEL` | `llama-3.3-70b-versatile` | LLM model to use |
 | `TEMPERATURE` | `0.3` | LLM temperature for generation |
 | `MAX_UPLOAD_MB` | `300` | Maximum combined upload payload size accepted by web API |
 | `OUTPUT_DIR` | `output` | Directory for generated planners |
@@ -148,7 +145,7 @@ The file contains the filled lesson plan template with 3 lessons, each covering 
 
 ## Tech Stack
 
-- **LLM**: Ollama → Mistral 7B
+- **LLM**: Groq API → LLaMA 3.3 70B Versatile (128K context)
 - **PDF Extraction**: PyMuPDF (text layer) + Tesseract OCR (scanned pages)
 - **Template**: python-docx (Word document manipulation)
 - **Web UI**: Flask + HTML/CSS/JS frontend

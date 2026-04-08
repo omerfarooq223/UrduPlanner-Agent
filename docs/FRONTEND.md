@@ -10,8 +10,8 @@ pip install -r requirements.txt
 ### 2. Set Up Environment Variables
 ```bash
 cp .env.example .env
-# Edit .env and add your OLLAMA_BASE_URL
-export OLLAMA_BASE_URL=your_key_here
+# Edit .env and add your GROQ_API_KEY
+export GROQ_API_KEY=your_key_here
 ```
 
 ### 3. Start the Web Server
@@ -127,14 +127,14 @@ app.run(debug=False, host='0.0.0.0', port=5001)
 
 - Use a modern computer with at least 4GB RAM
 - Large PDFs (500+ pages) may take longer to process
-- Keep your OLLAMA_BASE_URL private
+- Keep your GROQ_API_KEY private
 - Don't share the upload folder contents
 
 ## Support
 
 For issues, check:
 1. Are all dependencies installed? (`pip list`)
-2. Is OLLAMA_BASE_URL set? (`echo $OLLAMA_BASE_URL`)
+2. Is GROQ_API_KEY set? (`echo $GROQ_API_KEY`)
 3. Are Tesseract and Urdu language pack installed?
 4. Check logs in the `logs/` directory
 

@@ -6,10 +6,60 @@ Generates content for the exact lesson plan table layout:
 """
 
 import json
+import logging
 import re
+import time
 
 import config
 from skills.rtl_fixer.rtl_fixer import fix_rtl_text
+
+try:
+    from groq import Groq
+except ImportError as exc:  # pragma: no cover - dependency fallback
+    Groq = None
+    _GROQ_IMPORT_ERROR = exc
+else:
+    _GROQ_IMPORT_ERROR = None
+
+try:
+    from json_repair import repair_json
+except ImportError:  # pragma: no cover - optional dependency fallback
+    repair_json = None
+
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_RETRY_WAIT_SECONDS = 10
+MAX_RATE_LIMIT_RETRIES = 3
+
+_ENGLISH_TO_URDU_MAP = {
+    "january": "جنوری",
+    "february": "فروری",
+    "march": "مارچ",
+    "april": "اپریل",
+    "may": "مئی",
+    "june": "جون",
+    "july": "جولائی",
+    "august": "اگست",
+    "september": "ستمبر",
+    "october": "اکتوبر",
+    "november": "نومبر",
+    "december": "دسمبر",
+    "monday": "پیر",
+    "tuesday": "منگل",
+    "wednesday": "بدھ",
+    "thursday": "جمعرات",
+    "friday": "جمعہ",
+    "saturday": "ہفتہ",
+    "sunday": "اتوار",
+    "to": "تا",
+    "from": "سے",
+    "urdu": "اردو",
+    "english": "انگریزی",
+    "islamiyat": "اسلامیات",
+    "math": "ریاضی",
+    "science": "سائنس",
+}
 
 
 REPAIR_PROMPT = """You are an expert at reading garbled OCR output from Urdu textbooks (Nastaliq script).
@@ -96,6 +146,18 @@ FORMATTING RULES:
 Return ONLY a valid JSON object. No explanation, no markdown fences."""
 
 
+JSON_REPAIR_PROMPT = """You fix malformed JSON produced by another model.
+
+Rules:
+- Input is supposed to represent one lesson object.
+- Return ONLY a valid JSON object.
+- Preserve Urdu text exactly as much as possible.
+- Do not add markdown fences or explanations.
+- Ensure special characters inside strings are properly escaped.
+- Keep these keys: title, outcomes, intro, classwork, closing, homework, review.
+"""
+
+
 def _build_fixed_fields(
     week_number: int | None,
     date_range: str,
@@ -107,7 +169,8 @@ def _build_fixed_fields(
     the LLM is never asked to produce these.
     """
     week_str = f"تدریسی ہفتہ: {_to_urdu_numeral(week_number)}" if week_number else ""
-    date_str = f"تاریخ:: {date_range}" if date_range else ""
+    normalized_date_range = _normalize_to_urdu_text(date_range)
+    date_str = f"تاریخ:: {normalized_date_range}" if normalized_date_range else ""
     unit_str = f"یونٹ نمبر: {_to_urdu_numeral(unit_number)}" if unit_number else ""
 
     return {
@@ -133,22 +196,78 @@ def _to_urdu_numeral(n: int | None) -> str:
     return "".join(urdu_digits[int(d)] for d in str(n))
 
 
-def _normalize_ollama_base_url(base_url: str) -> str:
-    """Ensure Ollama URL points to OpenAI-compatible /v1 endpoint."""
-    url = base_url.rstrip("/")
-    return url if url.endswith("/v1") else f"{url}/v1"
+def _normalize_to_urdu_text(text: str) -> str:
+    """Convert common English date/subject tokens and digits to Urdu style."""
+    if not text:
+        return text
+
+    urdu_digits = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+    normalized = text.translate(urdu_digits)
+
+    for english, urdu in _ENGLISH_TO_URDU_MAP.items():
+        normalized = re.sub(rf"\b{re.escape(english)}\b", urdu, normalized, flags=re.IGNORECASE)
+
+    return normalized
 
 
 def _get_llm_client():
-    """Return an OpenAI-compatible client configured for Ollama."""
-    from openai import OpenAI
+    """Return a Groq client configured from environment settings."""
+    if Groq is None:
+        raise ImportError("groq package is not installed") from _GROQ_IMPORT_ERROR
 
-    return OpenAI(
-        base_url=_normalize_ollama_base_url(config.OLLAMA_BASE_URL),
-        api_key="not-needed",
+    if not config.GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not configured in .env file")
+
+    return Groq(
+        api_key=config.GROQ_API_KEY,
         timeout=360.0,
-        max_retries=2,
+        max_retries=0,
     )
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    error_text = str(exc).lower()
+    return '429' in error_text or 'rate limit' in error_text or 'too many requests' in error_text
+
+
+def _chat_completion_with_retry(client, **kwargs):
+    """Call chat completion with deterministic retry wait for 429 responses."""
+    for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            if _is_rate_limit_error(exc) and attempt < MAX_RATE_LIMIT_RETRIES:
+                logger.warning(
+                    "Rate limited by Groq; retrying in %s seconds (attempt %s/%s)",
+                    DEFAULT_RETRY_WAIT_SECONDS,
+                    attempt + 1,
+                    MAX_RATE_LIMIT_RETRIES,
+                )
+                time.sleep(DEFAULT_RETRY_WAIT_SECONDS)
+                continue
+            raise
+
+
+def validate_groq_configuration() -> None:
+    """Fail fast if the Groq API key or configured model is invalid."""
+    client = _get_llm_client()
+
+    try:
+        client.models.retrieve(config.MODEL, timeout=10.0)
+    except Exception as exc:
+        error_text = str(exc).lower()
+
+        if 'invalid_api_key' in error_text or 'invalid api key' in error_text or 'unauthorized' in error_text or '401' in error_text:
+            raise ValueError(
+                'Invalid GROQ_API_KEY in .env file. Please replace it with a valid Groq API key.'
+            ) from exc
+
+        if 'not found' in error_text or '404' in error_text:
+            raise ValueError(
+                f"Configured MODEL '{config.MODEL}' was not found for this Groq account. Update MODEL in .env."
+            ) from exc
+
+        raise
 
 
 def _extract_first_json_object(text: str) -> str | None:
@@ -249,19 +368,59 @@ def _parse_llm_json(raw: str) -> dict:
             raise
 
         candidate = extracted
-        try:
-            result = json.loads(candidate)
-        except json.JSONDecodeError:
-            repaired = _escape_control_chars_in_json_strings(candidate)
-            # Also handle trailing commas before } or ] which some models emit.
-            repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
-            result = json.loads(repaired)
+        parse_attempts = [candidate]
+        repaired = _escape_control_chars_in_json_strings(candidate)
+        # Also handle trailing commas before } or ] which some models emit.
+        repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
+        if repaired != candidate:
+            parse_attempts.append(repaired)
+
+        if repair_json is not None:
+            try:
+                repaired_candidate = repair_json(candidate)
+                if repaired_candidate:
+                    parse_attempts.append(repaired_candidate)
+            except Exception:
+                pass
+
+        last_error = None
+        for attempt in parse_attempts:
+            try:
+                result = json.loads(attempt)
+                break
+            except json.JSONDecodeError as error:
+                last_error = error
+        else:
+            if last_error is not None:
+                raise last_error
+            raise
 
     # Unwrap if LLM returned a list despite instructions
     if isinstance(result, list):
         result = result[0]
 
+    if not isinstance(result, dict):
+        raise ValueError("LLM output was JSON but not an object")
+
     return result
+
+
+def _repair_lesson_json_with_llm(client, raw: str) -> dict:
+    """Ask the LLM to repair malformed JSON and parse it safely."""
+    response = _chat_completion_with_retry(
+        client,
+        model=config.MODEL,
+        messages=[
+            {"role": "system", "content": JSON_REPAIR_PROMPT},
+            {"role": "user", "content": raw},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.0,
+        max_tokens=2400,
+        timeout=180.0,
+    )
+    repaired_raw = response.choices[0].message.content.strip()
+    return _parse_llm_json(repaired_raw)
 
 
 def _apply_rtl_fixes(lesson: dict) -> dict:
@@ -278,7 +437,8 @@ def repair_ocr_text(raw_text: str) -> str:
     Returns cleaned text that can be used for content generation.
     """
     client = _get_llm_client()
-    response = client.chat.completions.create(
+    response = _chat_completion_with_retry(
+        client,
         model=config.MODEL,
         messages=[
             {"role": "system", "content": REPAIR_PROMPT},
@@ -322,30 +482,43 @@ def generate_single_lesson(
     """
     client = _get_llm_client()
 
+    normalized_subject = _normalize_to_urdu_text(subject)
+
     user_msg = f"""Textbook content for pages {start_p}-{end_p}:
 
 {text}
 
 This lesson covers ONLY pages {start_p} to {end_p}. Do NOT reference content from other pages.
 Lesson number: {lesson_num} of 3
-{f"Subject: {subject}" if subject else ""}
+{f"Subject: {normalized_subject}" if normalized_subject else ""}
 {f"Additional instructions: {extra_instructions}" if extra_instructions else ""}
 
 Return ONLY a valid JSON object for this single lesson."""
 
-    response = client.chat.completions.create(
+    response = _chat_completion_with_retry(
+        client,
         model=config.MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
+        response_format={"type": "json_object"},
         temperature=config.TEMPERATURE,
         max_tokens=2200,
         timeout=300.0,
     )
 
     raw = response.choices[0].message.content.strip()
-    lesson = _parse_llm_json(raw)
+    try:
+        lesson = _parse_llm_json(raw)
+    except (json.JSONDecodeError, ValueError) as parse_error:
+        logger.warning(
+            "Lesson %s JSON parse failed, attempting repair: %s",
+            lesson_num,
+            parse_error,
+        )
+        lesson = _repair_lesson_json_with_llm(client, raw)
+
     lesson = _apply_rtl_fixes(lesson)
 
     # Inject fixed fields — these never go through the LLM

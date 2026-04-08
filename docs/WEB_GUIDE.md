@@ -41,7 +41,7 @@ Your UrduPlanner project now has a **beautiful, modern web interface** replacing
 ### Prerequisites
 - Python 3.10+
 - Tesseract OCR with Urdu language support
-- OLLAMA_BASE_URL (free from https://console.openai.com)
+- GROQ API key (free from https://console.groq.com)
 
 ### Installation
 
@@ -60,7 +60,7 @@ Your UrduPlanner project now has a **beautiful, modern web interface** replacing
    # Copy the example file
    cp .env.example .env
    
-   # Edit .env and add your OLLAMA_BASE_URL
+   # Edit .env and add your GROQ_API_KEY
    nano .env
    ```
 
@@ -238,13 +238,13 @@ kill -9 <PID>
 # Or use a different port (see Customization above)
 ```
 
-### Issue: "OLLAMA_BASE_URL not found"
+### Issue: "GROQ_API_KEY not found"
 ```bash
 # Make sure .env file exists and has:
-echo "OLLAMA_BASE_URL=your_actual_key" > .env
+echo "GROQ_API_KEY=your_actual_key" > .env
 
 # Verify it's set
-echo $OLLAMA_BASE_URL
+echo $GROQ_API_KEY
 ```
 
 ### Issue: Tesseract not found
@@ -266,7 +266,7 @@ sudo apt-get install tesseract-ocr-urd
 
 ### Issue: Generation fails with error
 - Check the `logs/` folder for detailed error logs
-- Ensure your OLLAMA_BASE_URL is valid
+- Ensure your GROQ_API_KEY is valid
 - Verify your PDF isn't corrupt
 - Try with a smaller page range
 
@@ -336,7 +336,7 @@ Having issues? Here's what to check:
 
 1. **Python installed?** → `python --version`
 2. **Dependencies installed?** → `pip list | grep Flask`
-3. **Environment set?** → `echo $OLLAMA_BASE_URL`
+3. **Environment set?** → `echo $GROQ_API_KEY`
 4. **Tesseract installed?** → `tesseract --version`
 5. **Port available?** → `lsof -i :5001`
 6. **Check logs** → `logs/` folder

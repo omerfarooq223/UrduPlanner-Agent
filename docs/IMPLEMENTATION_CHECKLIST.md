@@ -129,7 +129,7 @@ To start the frontend:
 2. Set environment:
    ```bash
    cp .env.example .env
-   # Edit .env with your OLLAMA_BASE_URL
+   # Edit .env with your GROQ_API_KEY
    ```
 
 3. Run the server:

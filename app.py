@@ -18,7 +18,11 @@ from flask_cors import CORS
 import config
 from skills.pdf_extractor.pdf_extractor import extract_pages
 from skills.template_engine.template_engine import read_template, fill_all_lessons
-from skills.content_generator.content_generator import generate_single_lesson, repair_ocr_text
+from skills.content_generator.content_generator import (
+    generate_single_lesson,
+    repair_ocr_text,
+    validate_groq_configuration,
+)
 
 # ── Setup ──────────────────────────────────────────────────────
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -176,11 +180,10 @@ def generate_plan():
         dates       = data.get('dates', '').strip()
         pages_input = data.get('pages', '').strip()
         subject     = data.get('subject', 'Urdu').strip()
-        unit        = data.get('unit_number', '').strip()
         template_path = data.get('template_path', '').strip()
         textbook_path = data.get('textbook_path', '').strip()
 
-        if not all([week, dates, pages_input, unit, template_path, textbook_path]):
+        if not all([week, dates, pages_input, template_path, textbook_path]):
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
 
         if not os.path.exists(template_path) or not os.path.exists(textbook_path):
@@ -191,11 +194,6 @@ def generate_plan():
             week_num = int(week)
         except ValueError:
             week_num = None
-
-        try:
-            unit_num = int(unit)
-        except ValueError:
-            unit_num = None
 
         # Get PDF page count
         try:
@@ -246,7 +244,7 @@ def generate_plan():
                     end_p=end_p,
                     week_number=week_num,
                     date_range=dates,
-                    unit_number=unit_num,
+                    unit_number=lesson_num,
                     subject=subject,
                 )
 
@@ -257,12 +255,12 @@ def generate_plan():
                 logger.error(f"Error generating Lesson {lesson_num}: {e}")
 
                 error_text = str(e).lower()
-                if 'invalid_api_key' in error_text or 'invalid api key' in error_text:
+                if 'invalid_api_key' in error_text or 'invalid api key' in error_text or 'api key' in error_text or 'authentication' in error_text:
                     return jsonify({
                         'success': False,
                         'error': (
-                            'Ollama request failed. '
-                            'Please verify OLLAMA_BASE_URL in your .env file and ensure Ollama is running.'
+                            'Groq request failed. '
+                            'Please verify GROQ_API_KEY in your .env file and ensure it is valid.'
                         )
                     }), 401
 
@@ -270,9 +268,8 @@ def generate_plan():
                     return jsonify({
                         'success': False,
                         'error': (
-                            'Configured Ollama model was not found. '
-                            'Update MODEL in .env (e.g., mistral:7b) and ensure it is pulled via '\
-                            '"ollama pull mistral:7b".'
+                            'Configured Groq model was not found. '
+                            'Update MODEL in .env and ensure the model name is correct for your Groq account.'
                         )
                     }), 400
 
@@ -280,8 +277,8 @@ def generate_plan():
                     return jsonify({
                         'success': False,
                         'error': (
-                            'Generation timed out while waiting for Ollama. '
-                            'Try a smaller page range or retry; the server timeout has been increased for long responses.'
+                            'Generation timed out while waiting for Groq. '
+                            'Try a smaller page range or retry.'
                         )
                     }), 504
 
@@ -358,6 +355,12 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv("PORT", "5001"))
     debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
+
+    try:
+        validate_groq_configuration()
+    except Exception as exc:
+        logger.error("Groq configuration validation failed: %s", exc)
+        raise SystemExit(str(exc)) from exc
 
     logger.info(f"Starting UrduPlanner Web Server on http://127.0.0.1:{port}")
     print(f"UrduPlanner is starting on http://127.0.0.1:{port}")

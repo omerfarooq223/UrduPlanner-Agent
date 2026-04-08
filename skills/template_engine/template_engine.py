@@ -27,6 +27,11 @@ import copy
 import os
 
 from docx import Document
+from docx.document import Document as DocxDocument
+from docx.oxml.ns import qn
+
+
+URDU_FONT_NAME = "Urdu Typesetting"
 
 
 # Row indices in each lesson table
@@ -153,7 +158,7 @@ def fill_all_lessons(
     """
     # Bug fix: accept both a path string and a pre-loaded Document object
     # so web flow (app.py) and CLI flow (main.py) can both call this correctly.
-    doc = template_path if isinstance(template_path, Document) else Document(template_path)
+    doc = template_path if isinstance(template_path, DocxDocument) else Document(template_path)
 
     if len(lessons) > len(doc.tables):
         raise ValueError(
@@ -195,7 +200,11 @@ def _replace_cell_text(cell, new_text: str):
     # Capture formatting from first paragraph/run before we touch anything
     template_para = cell.paragraphs[0]
     template_run = template_para.runs[0] if template_para.runs else None
-    template_pPr = copy.deepcopy(template_para._pPr) if template_para._pPr is not None else None
+    template_pPr = (
+        copy.deepcopy(template_para._element.pPr)
+        if template_para._element.pPr is not None
+        else None
+    )
     template_rPr = (
         copy.deepcopy(template_run._r.rPr)
         if template_run is not None and template_run._r.rPr is not None
@@ -212,8 +221,11 @@ def _replace_cell_text(cell, new_text: str):
     # Write first line into the existing first paragraph (preserves cell-level formatting)
     if template_run is not None:
         template_run.text = lines[0]
+        _force_urdu_font(template_run)
     else:
         template_para.text = lines[0]
+        if template_para.runs:
+            _force_urdu_font(template_para.runs[0])
 
     # Add a new paragraph per remaining line, copying RTL/font formatting
     for line in lines[1:]:
@@ -221,10 +233,28 @@ def _replace_cell_text(cell, new_text: str):
 
         # Copy paragraph properties: RTL direction, spacing, alignment
         if template_pPr is not None:
-            new_para._pPr = copy.deepcopy(template_pPr)
+            new_para._element.insert(0, copy.deepcopy(template_pPr))
 
         # Add run and copy run properties: font, size, bold, color
         new_run = new_para.add_run(line)
-        if template_rPr is not None:
-            new_run._r.get_or_add_rPr()
-            new_run._r.rPr = copy.deepcopy(template_rPr)
+        if template_run is not None:
+            new_run.bold = template_run.bold
+            new_run.italic = template_run.italic
+            new_run.underline = template_run.underline
+            new_run.font.name = template_run.font.name
+            new_run.font.size = template_run.font.size
+            new_run.font.rtl = template_run.font.rtl
+            if template_run.font.color is not None:
+                new_run.font.color.rgb = template_run.font.color.rgb
+        _force_urdu_font(new_run)
+
+
+def _force_urdu_font(run):
+    """Force the run font to Urdu Typesetting for Urdu script consistency."""
+    run.font.name = URDU_FONT_NAME
+    run.font.rtl = True
+    r_pr = run._element.get_or_add_rPr()
+    r_fonts = r_pr.get_or_add_rFonts()
+    r_fonts.set(qn("w:ascii"), URDU_FONT_NAME)
+    r_fonts.set(qn("w:hAnsi"), URDU_FONT_NAME)
+    r_fonts.set(qn("w:cs"), URDU_FONT_NAME)

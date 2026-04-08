@@ -151,12 +151,11 @@ planningForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const week = document.getElementById('week-input').value.trim();
-    const unit = document.getElementById('unit-input').value.trim();
     const dates = document.getElementById('dates-input').value.trim();
     const pages = document.getElementById('pages-input').value.trim();
     const subject = document.getElementById('subject-input').value.trim();
 
-    if (!week || !unit || !dates || !pages) {
+    if (!week || !dates || !pages) {
         alert('Please fill in all required fields');
         return;
     }
@@ -173,7 +172,6 @@ planningForm.addEventListener('submit', async (e) => {
     try {
         const payload = {
             week: week,
-            unit_number: unit,
             dates: dates,
             pages: pages,
             subject: subject,
@@ -188,7 +186,7 @@ planningForm.addEventListener('submit', async (e) => {
                 progress += Math.random() * 20;
                 updateProgress(
                     Math.min(progress, 90),
-                    'Processing with Ollama (this can take 3-10 minutes for larger pages)...'
+                    'Processing with Groq...'
                 );
             }
         }, 500);
@@ -277,7 +275,6 @@ function resetForm() {
     templateInput.value = '';
     textbookInput.value = '';
     document.getElementById('week-input').value = '';
-    document.getElementById('unit-input').value = '';
     document.getElementById('dates-input').value = '';
     document.getElementById('pages-input').value = '';
     document.getElementById('subject-input').value = 'Urdu';
