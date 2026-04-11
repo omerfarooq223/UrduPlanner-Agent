@@ -11,8 +11,10 @@ Just keep template.docx and textbook.pdf in the same folder.
 import os
 import sys
 import logging
+import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -20,11 +22,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 import fitz  # PyMuPDF
 
 import config
-from skills.pdf_extractor.pdf_extractor import extract_pages
+from skills.pdf_extractor.pdf_extractor import extract_pages, clean_ocr_text
 from skills.template_engine.template_engine import read_template, fill_all_lessons
 from skills.content_generator.content_generator import (
     generate_single_lesson,
-    repair_ocr_text,
     validate_groq_configuration,
 )
 
@@ -99,39 +100,42 @@ def process_lesson(
     lesson_num: int,
     page_range: list[int],
     textbook_path: str,
-    week_num: int | None,
+    week_num: Optional[int],
     dates: str,
     subject: str,
     progress,
     task_id,
 ) -> dict:
-    """Full pipeline for a single lesson: Extract -> Repair -> Generate."""
+    """Full pipeline for a single lesson: Extract -> Clean -> Generate."""
     if not page_range:
         progress.update(task_id, advance=100, description=f"[dim]Lesson {lesson_num}: No pages[/]")
         return {}
 
-    start_p, end_p = page_range[0], page_range[-1]
+    # book_pages are what the user entered; pdf_pages are offset-adjusted for extraction
+    book_start, book_end = page_range[0], page_range[-1]
+    pdf_start = book_start - config.PAGE_OFFSET
+    pdf_end = book_end - config.PAGE_OFFSET
 
-    # 1. Extract
-    progress.update(task_id, description=f"Lesson {lesson_num}: Extracting p{start_p}-{end_p}...")
-    text = extract_pages(textbook_path, start_p, end_p)
+    # 1. Extract from PDF using PDF page numbers
+    progress.update(task_id, description=f"Lesson {lesson_num}: Extracting p{book_start}-{book_end}...")
+    text = extract_pages(textbook_path, pdf_start, pdf_end)
     progress.update(task_id, advance=30)
 
-    # 2. Repair
+    # 2. Python-only OCR cleanup (no LLM needed)
     progress.update(task_id, description=f"Lesson {lesson_num}: Cleaning text...")
-    clean_text = repair_ocr_text(text)
-    progress.update(task_id, advance=30)
+    clean_text = clean_ocr_text(text)
+    progress.update(task_id, advance=20)
 
-    # 3. Generate — no sample passed, style is hardcoded in SYSTEM_PROMPT
+    # 3. Generate — uses book page numbers for the lesson plan output
     progress.update(task_id, description=f"Lesson {lesson_num}: Generating content...")
-    logger.info(f"Generating Lesson {lesson_num} (Pages {start_p}-{end_p})")
+    logger.info(f"Generating Lesson {lesson_num} (Book pages {book_start}-{book_end}, PDF pages {pdf_start}-{pdf_end})")
 
     try:
         lesson_data = generate_single_lesson(
             lesson_num=lesson_num,
             text=clean_text,
-            start_p=start_p,
-            end_p=end_p,
+            start_p=book_start,
+            end_p=book_end,
             week_number=week_num,
             date_range=dates,
             unit_number=lesson_num,
@@ -142,7 +146,7 @@ def process_lesson(
         logger.error(f"Failed to generate Lesson {lesson_num}: {e}")
         raise
 
-    progress.update(task_id, advance=40, description=f"[green]Lesson {lesson_num}: Complete[/]")
+    progress.update(task_id, advance=50, description=f"[green]Lesson {lesson_num}: Complete[/]")
     return lesson_data
 
 
@@ -231,6 +235,10 @@ def main():
                 task_id = progress.add_task(
                     description=f"Lesson {i+1}: Waiting...", total=100
                 )
+                if i > 0:
+                    # Stagger the start of each thread to avoid simultaneous API bursts
+                    time.sleep(5)
+
                 futures.append(executor.submit(
                     process_lesson,
                     i + 1,

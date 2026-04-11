@@ -4,10 +4,10 @@
 
 ```bash
 # 1. Navigate to project
-cd /Users/muhammadomerfarooq/Desktop/omer/UrduPlanner
+cd /Users/muhammadomerfarooq/Desktop/GitHub\ Repository/UrduPlanner
 
 # 2. Install dependencies (first time only)
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # 3. Configure environment
 cp .env.example .env

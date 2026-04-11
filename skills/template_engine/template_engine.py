@@ -26,6 +26,7 @@ Row mapping:
 import copy
 import os
 
+from typing import Union
 from docx import Document
 from docx.document import Document as DocxDocument
 from docx.oxml.ns import qn
@@ -146,7 +147,7 @@ def fill_lesson_table(table, lesson_data: dict):
 
 
 def fill_all_lessons(
-    template_path: "str | Document",
+    template_path: Union[str, DocxDocument],
     lessons: list[dict],
     output_path: str,
 ) -> str:

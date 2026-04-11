@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from typing import Optional, Union, Any
 
 import config
 from skills.rtl_fixer.rtl_fixer import fix_rtl_text
@@ -29,8 +30,8 @@ except ImportError:  # pragma: no cover - optional dependency fallback
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_RETRY_WAIT_SECONDS = 10
-MAX_RATE_LIMIT_RETRIES = 3
+DEFAULT_RETRY_WAIT_SECONDS = 25
+MAX_RATE_LIMIT_RETRIES = 5
 
 _ENGLISH_TO_URDU_MAP = {
     "january": "جنوری",
@@ -62,88 +63,48 @@ _ENGLISH_TO_URDU_MAP = {
 }
 
 
-REPAIR_PROMPT = """You are an expert at reading garbled OCR output from Urdu textbooks (Nastaliq script).
-
-The text below was extracted from an Urdu textbook PDF but the OCR has badly mangled the words.
-Your job is to reconstruct the ACTUAL Urdu text that appears on the page.
-
-Rules:
-- Fix broken/split words back to their correct form (e.g. "ححضرت جج ر ایل" → "حضرت جبرائیل")
-- Fix garbled topic names (e.g. "مرا کاواتے" is likely "معراج کا واقعہ")
-- Preserve the meaning, structure, and paragraph breaks
-- Keep page markers like "── Page 52 ──" as-is
-- Write ONLY Urdu script (no English, no Chinese characters)
-- If you cannot confidently reconstruct a word, make your best guess from context
-- The textbook is an Islamiyat (اسلامیات) book for primary school children
-- Output ONLY the cleaned text, no explanations"""
-
-
 SYSTEM_PROMPT = """You are an expert Urdu school planner assistant for a primary school teacher.
-You generate weekly lesson plan content (سبق کی منصوبہ بندی) in Urdu.
 
-Given extracted textbook pages, generate a single lesson JSON object with these fields ONLY:
+Given OCR-extracted textbook pages, return a JSON object with EXACTLY these 6 keys.
+The system will assemble the final lesson plan — you provide ONLY the variable content.
 
-1. title — Line 1: exact lesson title as written in the textbook. Line 2: key terms separated by commas.
+1. lesson_title — The EXACT lesson title/heading as written in the textbook. Copy it exactly.
 
-2. outcomes — Start with "اس سبق کے اختتام پر طلباء اس قابل ہوں گے کہ:\n" then list 3 learning
-   outcomes on the next line, each ending with ۔
+2. keywords — 3-5 key terms from the lesson, separated by commas. Urdu only.
 
-3. intro — Start with "طلبا سے پوچھا جائے گا کہ:\n" then 2-3 hook questions for students.
-   End with "\n\n۵ منٹس"
+3. learning_outcomes — 3 learning outcomes, each on a new line, each ending with ۔
+   Do NOT include any prefix like "اس سبق کے اختتام پر" — the system adds it.
 
-4. classwork — This is the LONGEST and MOST IMPORTANT field (600-900 Urdu characters). Structure:
-   Line 1: "ہر طالب علم صفحہ نمبر [pages] سے باری باری تین تین لائنیں پڑھیں گے۔ استاد مشکل الفاظ کی ادائیگی میں مدد کریں گے۔"
-   Line 2: "پڑھائی کے بعد استاد وضاحت سے سمجھائیں گے:"
-   Lines 3+: Detailed retelling of the textbook content — at least 3-4 paragraphs covering key
-   events, dialogues, and lessons. Include who said what, what happened step by step, and the
-   moral. Do NOT write short generic summaries.
-   Last line: "\n۲۷ منٹس"
+4. hook_questions — 2-3 warm-up questions to ask students before the lesson.
+   Each question on a new line. Do NOT include any prefix — the system adds it.
 
-5. closing — Start with "طلبا سے پوچھا جائے گا کہ:\n" then 2-3 comprehension questions.
-   End with "\n\n۵ منٹس"
+5. content_summary — This is the MOST IMPORTANT field. A detailed retelling of what is
+   on the provided textbook pages (400-700 Urdu characters).
+   - Cover key events, dialogues, and lessons step by step
+   - Include who said what, what happened, and any moral/lesson
+   - Do NOT write short generic summaries — be detailed and specific
+   - Content must come ONLY from the provided pages. Do NOT invent content.
 
-6. homework — Homework if applicable, otherwise empty string ""
+6. review_questions — 2-3 comprehension questions about the lesson content.
+   Each question on a new line. Do NOT include any prefix — the system adds it.
 
-7. review — Teaching review notes, otherwise empty string ""
-
-DO NOT include these fields — they are injected by the system:
-teaching_week, dates, unit_number, resources, core_teaching, assessment
-
----
-
-EXAMPLE OF A CORRECTLY FILLED LESSON (fictional topic — for style reference only):
-
-{
-  "title": "پانی کا سفر\nپانی، بخارات، بادل، بارش، دریا",
-
-  "outcomes": "اس سبق کے اختتام پر طلباء اس قابل ہوں گے کہ:\nپانی کے چکر کے مراحل بیان کر سکیں گے۔\nبخارات اور بارش کا آپس میں تعلق سمجھ سکیں گے۔\nپانی کی اہمیت اور بچاؤ کے طریقے بتا سکیں گے۔",
-
-  "intro": "طلبا سے پوچھا جائے گا کہ:\nجب بارش ہوتی ہے تو پانی کہاں سے آتا ہے؟\nکیا آپ نے کبھی سوچا کہ ندیوں کا پانی ختم کیوں نہیں ہوتا؟\nدھوپ میں پانی کا گلاس رکھیں تو کیا ہوتا ہے؟\n\n۵ منٹس",
-
-  "classwork": "ہر طالب علم صفحہ نمبر ۲۳ سے باری باری تین تین لائنیں پڑھیں گے۔ استاد مشکل الفاظ کی ادائیگی میں مدد کریں گے۔\nپڑھائی کے بعد استاد وضاحت سے سمجھائیں گے:\nسورج کی گرمی سے سمندروں، دریاؤں اور جھیلوں کا پانی گرم ہو کر بخارات میں بدل جاتا ہے۔ یہ بخارات ہلکے ہونے کی وجہ سے اوپر اٹھتے ہیں اور آسمان پر جا کر ٹھنڈے ہو جاتے ہیں۔ ٹھنڈے ہونے پر یہ بخارات چھوٹے چھوٹے پانی کے قطروں میں بدل جاتے ہیں جو مل کر بادل بناتے ہیں۔\nجب بادلوں میں پانی کے قطرے بہت زیادہ ہو جاتے ہیں تو وہ بارش کی صورت میں زمین پر گرتے ہیں۔ یہ بارش کا پانی ندیوں اور دریاؤں میں جمع ہوتا ہے اور پھر واپس سمندر میں چلا جاتا ہے۔ اس طرح پانی کا چکر مسلسل چلتا رہتا ہے اور زمین پر پانی کبھی ختم نہیں ہوتا۔\nاستاد طلبا کو سمجھائیں کہ پانی اللہ کی بہت بڑی نعمت ہے۔ ہمیں پانی کو ضائع نہیں کرنا چاہیے۔ برش کرتے وقت، کپڑے دھوتے وقت اور نہاتے وقت پانی بچانا ہماری ذمہ داری ہے۔ پانی کے بغیر نہ انسان زندہ رہ سکتا ہے، نہ جانور اور نہ پودے۔\n۲۷ منٹس",
-
-  "closing": "طلبا سے پوچھا جائے گا کہ:\nپانی بخارات میں کیسے بدلتا ہے؟\nبادل کیسے بنتے ہیں اور بارش کیوں ہوتی ہے؟\nہم روزمرہ زندگی میں پانی کیسے بچا سکتے ہیں؟\n\n۵ منٹس",
-
-  "homework": "",
-  "review": ""
-}
-
----
-
-FORMATTING RULES:
+RULES:
 - All content in Urdu script ONLY. Never use Chinese, Japanese, or any non-Urdu characters.
-- If you need a word like "command/order", write it in Urdu: حکم — NEVER use Chinese characters.
 - Urdu numerals only: ۰۱۲۳۴۵۶۷۸۹ — never use 0-9
-- Colon placement: colon comes immediately AFTER the Urdu word, no space before it.
-  Correct: "ہفتہ: ۸" — Wrong: "ہفتہ :" — Wrong: ":ہفتہ"
-- After "کہ:" ALWAYS put \\n before content.
-  Never: "کہ:حضرت" — Always: "کہ:\\nحضرت"
 - Urdu full stop is ۔ not the English period .
-- Content must come ONLY from the provided textbook pages. Do NOT invent or fabricate content.
-- Lesson title MUST be the exact heading as written in the textbook, not paraphrased.
-- Page numbers in classwork must match the actual pages provided.
+- lesson_title MUST be the exact heading from the textbook, not paraphrased.
+- Content must come ONLY from the provided textbook pages. Do NOT fabricate.
+- Return ONLY a valid JSON object. No explanation, no markdown fences.
 
-Return ONLY a valid JSON object. No explanation, no markdown fences."""
+EXAMPLE (fictional topic — for style reference only):
+{
+  "lesson_title": "پانی کا سفر",
+  "keywords": "پانی، بخارات، بادل، بارش، دریا",
+  "learning_outcomes": "پانی کے چکر کے مراحل بیان کر سکیں گے۔\nبخارات اور بارش کا آپس میں تعلق سمجھ سکیں گے۔\nپانی کی اہمیت اور بچاؤ کے طریقے بتا سکیں گے۔",
+  "hook_questions": "جب بارش ہوتی ہے تو پانی کہاں سے آتا ہے؟\nکیا آپ نے کبھی سوچا کہ ندیوں کا پانی ختم کیوں نہیں ہوتا؟\nدھوپ میں پانی کا گلاس رکھیں تو کیا ہوتا ہے؟",
+  "content_summary": "سورج کی گرمی سے سمندروں، دریاؤں اور جھیلوں کا پانی گرم ہو کر بخارات میں بدل جاتا ہے۔ یہ بخارات ہلکے ہونے کی وجہ سے اوپر اٹھتے ہیں اور آسمان پر جا کر ٹھنڈے ہو جاتے ہیں۔ ٹھنڈے ہونے پر یہ بخارات چھوٹے چھوٹے پانی کے قطروں میں بدل جاتے ہیں جو مل کر بادل بناتے ہیں۔ جب بادلوں میں پانی کے قطرے بہت زیادہ ہو جاتے ہیں تو وہ بارش کی صورت میں زمین پر گرتے ہیں۔ یہ بارش کا پانی ندیوں اور دریاؤں میں جمع ہوتا ہے اور پھر واپس سمندر میں چلا جاتا ہے۔ اس طرح پانی کا چکر مسلسل چلتا رہتا ہے۔ استاد طلبا کو سمجھائیں کہ پانی اللہ کی بہت بڑی نعمت ہے۔ ہمیں پانی کو ضائع نہیں کرنا چاہیے۔",
+  "review_questions": "پانی بخارات میں کیسے بدلتا ہے؟\nبادل کیسے بنتے ہیں اور بارش کیوں ہوتی ہے؟\nہم روزمرہ زندگی میں پانی کیسے بچا سکتے ہیں؟"
+}"""
 
 
 JSON_REPAIR_PROMPT = """You fix malformed JSON produced by another model.
@@ -154,14 +115,14 @@ Rules:
 - Preserve Urdu text exactly as much as possible.
 - Do not add markdown fences or explanations.
 - Ensure special characters inside strings are properly escaped.
-- Keep these keys: title, outcomes, intro, classwork, closing, homework, review.
+- Keep these keys: lesson_title, keywords, learning_outcomes, hook_questions, content_summary, review_questions.
 """
 
 
 def _build_fixed_fields(
-    week_number: int | None,
+    week_number: Optional[int],
     date_range: str,
-    unit_number: int | None,
+    unit_number: Optional[int],
 ) -> dict:
     """
     Returns fields that never change or come directly from user CLI input.
@@ -188,7 +149,7 @@ def _build_fixed_fields(
     }
 
 
-def _to_urdu_numeral(n: int | None) -> str:
+def _to_urdu_numeral(n: Optional[int]) -> str:
     """Convert an integer to Urdu numeral string."""
     if n is None:
         return ""
@@ -270,7 +231,7 @@ def validate_groq_configuration() -> None:
         raise
 
 
-def _extract_first_json_object(text: str) -> str | None:
+def _extract_first_json_object(text: str) -> Optional[str]:
     """Extract the first balanced JSON object from text."""
     start = text.find("{")
     if start == -1:
@@ -431,24 +392,7 @@ def _apply_rtl_fixes(lesson: dict) -> dict:
     }
 
 
-def repair_ocr_text(raw_text: str) -> str:
-    """
-    Send garbled OCR text to the LLM to reconstruct correct Urdu.
-    Returns cleaned text that can be used for content generation.
-    """
-    client = _get_llm_client()
-    response = _chat_completion_with_retry(
-        client,
-        model=config.MODEL,
-        messages=[
-            {"role": "system", "content": REPAIR_PROMPT},
-            {"role": "user", "content": raw_text},
-        ],
-        temperature=0.2,
-        max_tokens=1400,
-        timeout=300.0,
-    )
-    return response.choices[0].message.content.strip()
+# repair_ocr_text has been removed — replaced by Python-only clean_ocr_text in pdf_extractor
 
 
 def generate_single_lesson(
@@ -456,29 +400,34 @@ def generate_single_lesson(
     text: str,
     start_p: int,
     end_p: int,
-    week_number: int | None = None,
+    week_number: Optional[int] = None,
     date_range: str = "",
-    unit_number: int | None = None,
+    unit_number: Optional[int] = None,
     subject: str = "",
     extra_instructions: str = "",
 ) -> dict:
     """
-    Call the LLM to generate variable content for a single lesson,
-    then merge in fixed fields injected directly from user input.
+    Call the LLM to generate minimal variable content for a single lesson,
+    then assemble full fields in Python and merge in fixed fields.
+
+    The LLM returns 6 keys: lesson_title, keywords, learning_outcomes,
+    hook_questions, content_summary, review_questions.
+
+    Python assembles the complete lesson fields with boilerplate.
 
     Args:
         lesson_num:        Which lesson this is (1, 2, or 3)
         text:              Cleaned textbook content for this lesson's pages
-        start_p:           First page number covered by this lesson
-        end_p:             Last page number covered by this lesson
+        start_p:           First book page number covered by this lesson
+        end_p:             Last book page number covered by this lesson
         week_number:       Teaching week number from CLI input
-        date_range:        Date range string from CLI input (e.g. "۹ مارچ تا ۱۳ مارچ")
+        date_range:        Date range string from CLI input
         unit_number:       Unit number from CLI input
         subject:           Subject name from CLI input
         extra_instructions: Any additional instructions to append to the user message
 
     Returns:
-        Complete lesson dict with both LLM-generated and fixed fields.
+        Complete lesson dict with both assembled and fixed fields.
     """
     client = _get_llm_client()
 
@@ -493,7 +442,7 @@ Lesson number: {lesson_num} of 3
 {f"Subject: {normalized_subject}" if normalized_subject else ""}
 {f"Additional instructions: {extra_instructions}" if extra_instructions else ""}
 
-Return ONLY a valid JSON object for this single lesson."""
+Return ONLY a valid JSON object with the 6 required keys."""
 
     response = _chat_completion_with_retry(
         client,
@@ -504,22 +453,72 @@ Return ONLY a valid JSON object for this single lesson."""
         ],
         response_format={"type": "json_object"},
         temperature=config.TEMPERATURE,
-        max_tokens=2200,
+        max_tokens=1400,
         timeout=300.0,
     )
 
     raw = response.choices[0].message.content.strip()
     try:
-        lesson = _parse_llm_json(raw)
+        llm_data = _parse_llm_json(raw)
     except (json.JSONDecodeError, ValueError) as parse_error:
         logger.warning(
             "Lesson %s JSON parse failed, attempting repair: %s",
             lesson_num,
             parse_error,
         )
-        lesson = _repair_lesson_json_with_llm(client, raw)
+        llm_data = _repair_lesson_json_with_llm(client, raw)
 
-    lesson = _apply_rtl_fixes(lesson)
+    llm_data = _apply_rtl_fixes(llm_data)
+
+    # Log the title for verification
+    title = llm_data.get('lesson_title', '')
+    logger.info(f"Lesson {lesson_num} title from LLM: {title}")
+
+    # ── Assemble full lesson fields from LLM output + boilerplate ──
+    page_nums_urdu = _to_urdu_numeral(start_p)
+    if start_p != end_p:
+        page_nums_urdu += "-" + _to_urdu_numeral(end_p)
+
+    lesson = {
+        # Title: lesson title + keywords on second line
+        "title": (
+            f"{llm_data.get('lesson_title', '')}"
+            f"\n{llm_data.get('keywords', '')}"
+        ),
+
+        # Outcomes: standard prefix + LLM-generated outcomes
+        "outcomes": (
+            f"اس سبق کے اختتام پر طلباء اس قابل ہوں گے کہ:"
+            f"\n{llm_data.get('learning_outcomes', '')}"
+        ),
+
+        # Intro: standard prefix + LLM-generated hook questions + duration
+        "intro": (
+            f"طلبا سے پوچھا جائے گا کہ:"
+            f"\n{llm_data.get('hook_questions', '')}"
+            f"\n\n۵ منٹس"
+        ),
+
+        # Classwork: page header + LLM-generated content summary + duration
+        "classwork": (
+            f"ہر طالب علم صفحہ نمبر {page_nums_urdu} سے باری باری تین تین لائنیں پڑھیں گے۔ "
+            f"استاد مشکل الفاظ کی ادائیگی میں مدد کریں گے۔"
+            f"\nپڑھائی کے بعد استاد وضاحت سے سمجھائیں گے:"
+            f"\n{llm_data.get('content_summary', '')}"
+            f"\n۲۷ منٹس"
+        ),
+
+        # Closing: standard prefix + LLM-generated review questions + duration
+        "closing": (
+            f"طلبا سے پوچھا جائے گا کہ:"
+            f"\n{llm_data.get('review_questions', '')}"
+            f"\n\n۵ منٹس"
+        ),
+
+        # Homework and review: always empty (set by Python)
+        "homework": "",
+        "review": "",
+    }
 
     # Inject fixed fields — these never go through the LLM
     fixed = _build_fixed_fields(week_number, date_range, unit_number)

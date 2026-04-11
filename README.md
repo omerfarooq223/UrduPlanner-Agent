@@ -89,8 +89,8 @@ brew install tesseract-lang   # includes Urdu language data
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+# 1. Install dependencies in this environment
+python -m pip install -r requirements.txt
 
 # 2. Set up your API key
 cp .env.example .env

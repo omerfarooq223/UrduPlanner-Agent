@@ -6,21 +6,29 @@ Provides a beautiful web interface for the lesson planner
 import os
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
-from werkzeug.exceptions import RequestEntityTooLarge
-from werkzeug.utils import secure_filename
-import fitz  # PyMuPDF
 
-from flask import Flask, render_template, request, jsonify, send_file
-from flask_cors import CORS
+try:
+    from werkzeug.exceptions import RequestEntityTooLarge
+    from werkzeug.utils import secure_filename
+    import fitz  # PyMuPDF
+
+    from flask import Flask, render_template, request, jsonify, send_file
+    from flask_cors import CORS
+except ModuleNotFoundError as exc:
+    missing_package = exc.name or "a required dependency"
+    raise SystemExit(
+        f"Missing Python dependency: {missing_package}. "
+        "Run 'python -m pip install -r requirements.txt' in the project virtual environment, then start the app again."
+    ) from exc
 
 import config
-from skills.pdf_extractor.pdf_extractor import extract_pages
+from skills.pdf_extractor.pdf_extractor import extract_pages, clean_ocr_text
 from skills.template_engine.template_engine import read_template, fill_all_lessons
 from skills.content_generator.content_generator import (
     generate_single_lesson,
-    repair_ocr_text,
     validate_groq_configuration,
 )
 
@@ -179,7 +187,7 @@ def generate_plan():
         week        = data.get('week', '').strip()
         dates       = data.get('dates', '').strip()
         pages_input = data.get('pages', '').strip()
-        subject     = data.get('subject', 'Urdu').strip()
+        subject     = data.get('subject', 'Islamiyat').strip()
         template_path = data.get('template_path', '').strip()
         textbook_path = data.get('textbook_path', '').strip()
 
@@ -225,23 +233,26 @@ def generate_plan():
                 lessons_data.append({})
                 continue
 
-            start_p, end_p = page_range[0], page_range[-1]
+            # book pages = user input; pdf pages = offset-adjusted for extraction
+            book_start, book_end = page_range[0], page_range[-1]
+            pdf_start = book_start - config.PAGE_OFFSET
+            pdf_end = book_end - config.PAGE_OFFSET
 
             try:
-                logger.info(f"Processing Lesson {lesson_num}: Pages {start_p}-{end_p}")
+                logger.info(f"Processing Lesson {lesson_num}: Book pages {book_start}-{book_end} (PDF pages {pdf_start}-{pdf_end})")
 
-                # Extract
-                text = extract_pages(textbook_path, start_p, end_p)
+                # Extract using PDF page numbers
+                text = extract_pages(textbook_path, pdf_start, pdf_end)
 
-                # Repair
-                clean_text = repair_ocr_text(text)
+                # Python-only OCR cleanup (no LLM needed)
+                clean_text = clean_ocr_text(text)
 
-                # Generate
+                # Generate using book page numbers (for student-facing output)
                 lesson_data = generate_single_lesson(
                     lesson_num=lesson_num,
                     text=clean_text,
-                    start_p=start_p,
-                    end_p=end_p,
+                    start_p=book_start,
+                    end_p=book_end,
                     week_number=week_num,
                     date_range=dates,
                     unit_number=lesson_num,
@@ -250,6 +261,10 @@ def generate_plan():
 
                 lessons_data.append(lesson_data)
                 logger.info(f"Lesson {lesson_num} generated successfully")
+
+                # Add a small gap between lessons to avoid rate limits
+                if lesson_num < 3:
+                    time.sleep(2)
 
             except Exception as e:
                 logger.error(f"Error generating Lesson {lesson_num}: {e}")
