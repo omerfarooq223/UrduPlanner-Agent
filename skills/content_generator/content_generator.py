@@ -138,14 +138,6 @@ def _build_fixed_fields(
         "teaching_week": week_str,
         "dates": date_str,
         "unit_number": unit_str,
-        "resources": "کتاب، مارکر، بورڈ",
-        "core_teaching": (
-            "طلبا کتاب پر تاریخ اور دن لکھیں گے۔ "
-            "استاد غیر حاضر طلبا کے نام نوٹ کریں گے۔\n۳ منٹس"
-        ),
-        "assessment": (
-            "کتاب میں دیے گئے سوالات کی مدد سے طلبا کی سمجھ جانچی جائے گی۔"
-        ),
     }
 
 
@@ -506,6 +498,18 @@ Return ONLY a valid JSON object with the 6 required keys."""
             f"\nپڑھائی کے بعد استاد وضاحت سے سمجھائیں گے:"
             f"\n{llm_data.get('content_summary', '')}"
             f"\n۲۷ منٹس"
+        ),
+
+        # Resources / core teaching / assessment are template rows that still need content.
+        "resources": "کتاب، بورڈ، مارکر",
+
+        "core_teaching": (
+            f"استاد پہلے سبق کے اہم نکات بورڈ پر واضح کریں گے۔"
+            f"\n{llm_data.get('content_summary', '')}"
+        ),
+
+        "assessment": (
+            f"کتاب میں دیے گئے سوالات کی مدد سے طلبا کی سمجھ جانچی جائے گی۔"
         ),
 
         # Closing: standard prefix + LLM-generated review questions + duration

@@ -190,53 +190,37 @@ def _replace_cell_text(cell, new_text: str):
     """
     Replace all text in a table cell while preserving RTL formatting.
 
-    Bug fix: previously wrote everything into paragraph[0] and wiped the rest,
-    which collapsed multi-line fields (classwork, outcomes, etc.) into one block.
-    Now splits on newlines and creates a properly formatted paragraph per line.
+    Bug fix: clear the cell contents first so template paragraphs do not leak
+    through into the generated document, then recreate only the paragraphs
+    needed for the new content.
     """
-    if not cell.paragraphs:
-        cell.text = new_text
-        return
+    template_para = cell.paragraphs[0] if cell.paragraphs else None
+    template_run = template_para.runs[0] if template_para and template_para.runs else None
+    template_pPr = copy.deepcopy(template_para._element.pPr) if template_para and template_para._element.pPr is not None else None
 
-    # Capture formatting from first paragraph/run before we touch anything
-    template_para = cell.paragraphs[0]
-    template_run = template_para.runs[0] if template_para.runs else None
-    template_pPr = (
-        copy.deepcopy(template_para._element.pPr)
-        if template_para._element.pPr is not None
-        else None
-    )
-    template_rPr = (
-        copy.deepcopy(template_run._r.rPr)
-        if template_run is not None and template_run._r.rPr is not None
-        else None
-    )
-
-    # Clear all existing runs in all paragraphs
-    for para in cell.paragraphs:
-        for run in para.runs:
-            run.text = ""
-
-    lines = new_text.split("\n")
-
-    # Write first line into the existing first paragraph (preserves cell-level formatting)
-    if template_run is not None:
-        template_run.text = lines[0]
-        _force_urdu_font(template_run)
+    # Remove the existing cell content but keep the cell properties / borders.
+    if hasattr(cell._tc, "clear_content"):
+        cell._tc.clear_content()
     else:
-        template_para.text = lines[0]
-        if template_para.runs:
-            _force_urdu_font(template_para.runs[0])
+        for child in list(cell._tc):
+            if child.tag.endswith("}tcPr"):
+                continue
+            cell._tc.remove(child)
 
-    # Add a new paragraph per remaining line, copying RTL/font formatting
-    for line in lines[1:]:
+    lines = new_text.split("\n") if new_text else [""]
+
+    # Write only the new paragraphs that the field actually needs.
+    for line in lines:
         new_para = cell.add_paragraph()
 
-        # Copy paragraph properties: RTL direction, spacing, alignment
+        if template_para is not None and template_para.style is not None:
+            new_para.style = template_para.style
+
+        # Copy paragraph properties: RTL direction, spacing, alignment.
         if template_pPr is not None:
             new_para._element.insert(0, copy.deepcopy(template_pPr))
 
-        # Add run and copy run properties: font, size, bold, color
+        # Add run and copy run properties: font, size, bold, color.
         new_run = new_para.add_run(line)
         if template_run is not None:
             new_run.bold = template_run.bold

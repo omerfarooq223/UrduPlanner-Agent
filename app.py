@@ -304,7 +304,10 @@ def generate_plan():
 
         # Fill template — pass path string so fill_all_lessons loads a fresh Document
         try:
-            output_filename = f"urdu_planner_w{week}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            week_label = f"_Week_{week_num}" if week_num else ""
+            start_page = pages_list[0]
+            end_page = pages_list[-1]
+            output_filename = f"Planner{week_label}_p{start_page}-{end_page}.docx"
             output_path = os.path.join(config.OUTPUT_DIR, output_filename)
 
             fill_all_lessons(template_path, lessons_data, output_path)
